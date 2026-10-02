@@ -437,8 +437,8 @@
     <div class="outputGrid">
       <div class="outputCard">
         <h3>SQL Lead Handoff</h3>
-        <p>Qualified leads prepared for commercial follow-up, including acquisition lineage, UTM, landing policy, consent, MQL evidence, SQL status and next action.</p>
-        <button class="btn" id="downloadSql">Download SQL Handoff CSV</button>
+        <p>Qualified leads prepared for commercial follow-up, including a fictitious contact email in the classroom example, GDPR / RGPD consent evidence, acquisition lineage, UTM, landing policy, MQL evidence, SQL status and next action.</p>
+        <button class="btn" id="downloadSql">Download SQL Handoff CSV</button><div class="micro" style="margin-top:8px">SQL-ready identity contract: <b>contact_email</b> + <b>GDPR / RGPD consent status and timestamp</b>. Classroom emails are fictitious and non-deliverable.</div>
       </div>
 
       <div class="outputCard">
@@ -814,6 +814,30 @@ function outputSqlRows(){
   if(stageState.ran)return activeSqlRows();
   return exampleMode ? leads : []
 }
+function sqlHandoffRows(){
+  return outputSqlRows().map((r,i)=>{
+    const contactEmail=String(r.contact_email||r.customer_email||r.email||'').trim();
+    const rawConsent=String(r.gdpr_consent_status||r.rgpd_consent_status||r.consent_status||'').trim();
+    const consentUpper=rawConsent.toUpperCase();
+    const consentGranted=['YES','TRUE','CONSENTED','GRANTED','ACCEPTED'].includes(consentUpper);
+    const consentStatus=consentGranted?'CONSENTED':(rawConsent||'UNKNOWN');
+    const consentTimestamp=r.gdpr_consent_timestamp||r.rgpd_consent_timestamp||r.consent_timestamp||'';
+    return {
+      ...r,
+      contact_email:contactEmail,
+      email:r.email||contactEmail,
+      email_captured:contactEmail?'YES':'NO',
+      gdpr_consent_status:consentStatus,
+      gdpr_consent_timestamp:consentTimestamp,
+      gdpr_lawful_basis:r.gdpr_lawful_basis||'Consent',
+      gdpr_consent_purpose:r.gdpr_consent_purpose||'Commercial contact and assisted-sales follow-up',
+      gdpr_consent_source:r.gdpr_consent_source||'MQL landing form · first-party',
+      gdpr_privacy_notice_version:r.gdpr_privacy_notice_version||'DOCROI_MQL_PRIVACY_DEMO_1.0',
+      rgpd_consent_status:consentStatus,
+      rgpd_consent_timestamp:consentTimestamp
+    }
+  })
+}
 function outputDirectRows(){
   if(stageState.ran)return activeDirectRows();
   return exampleMode ? direct : []
@@ -914,6 +938,12 @@ function workbookDataDictionary(){
   return [
     {field:'customer_key',meaning:'Stable customer identifier. Present only after a purchase exists.'},
     {field:'lead_id',meaning:'Unique MQL / SQL lead identifier.'},
+    {field:'contact_email',meaning:'Primary email passed to SQL. The Don Espadín classroom example uses non-deliverable fictitious addresses under example.invalid.'},
+    {field:'email_captured',meaning:'YES when a contact email is present in the handoff.'},
+    {field:'gdpr_consent_status / rgpd_consent_status',meaning:'Commercial-contact consent status carried from the MQL landing form into SQL.'},
+    {field:'gdpr_consent_timestamp / rgpd_consent_timestamp',meaning:'Timestamp of the simulated or real consent evidence.'},
+    {field:'gdpr_consent_purpose',meaning:'Declared purpose for downstream commercial contact.'},
+    {field:'gdpr_consent_source',meaning:'Source where consent was captured.'},
     {field:'source_person_id',meaning:'Simulated source person or prospect identifier.'},
     {field:'conversion_route',meaning:'DIRECT_ECOMMERCE or SQL_ASSISTED.'},
     {field:'mql_status',meaning:'Marketing qualification status.'},
@@ -971,7 +1001,7 @@ function downloadOperationalExcel(){
 
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(summaryRows),'Campaign Summary');
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(campaignResults()),'Campaign Manager Detail');
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(activeSqlRows()),'SQL Handoff - 35 Leads');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sqlHandoffRows()),'SQL Handoff - 35 Leads');
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(convertedCustomers()),'Converted Customers - 40');
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(customerReconciliation()),'Customer Reconciliation');
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(workbookDataDictionary()),'Data Dictionary');
@@ -998,7 +1028,7 @@ function renderOutputs(){
     return
   }
 
-  const m=outputMetricsData(),sqlRows=outputSqlRows();
+  const m=outputMetricsData(),sqlRows=sqlHandoffRows();
 
   $('#outputMetrics').innerHTML=[
     ['SQL handoff',m.sql],
@@ -1016,7 +1046,8 @@ function renderOutputs(){
   }
 
   const keys=[
-    'lead_id','source_person_id','customer_key','campaign_id','channel',
+    'lead_id','source_person_id','contact_email','email_captured',
+    'gdpr_consent_status','gdpr_consent_timestamp','campaign_id','channel',
     'landing_policy','strategic_tag','mql_score','sql_handoff_status',
     'sql_outcome','purchase_status','owner_queue','next_action'
   ];
@@ -1035,7 +1066,7 @@ $('#runOwned').onclick=executeOwned;
 $('#runAll').onclick=runExecution;
 $('#downloadSql').onclick=()=>{
   if(!outputDataAvailable())return alert('No SQL handoff is available yet. Load the example or run the configured laboratory first.');
-  dl(sqlExportFilename(),csv(outputSqlRows()))
+  dl(sqlExportFilename(),csv(sqlHandoffRows()))
 };
 $('#downloadCampaigns').onclick=()=>{
   if(!outputDataAvailable())return alert('No campaign result is available yet. Load the example or run the configured laboratory first.');
